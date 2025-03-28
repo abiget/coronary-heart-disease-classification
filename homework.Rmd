@@ -1,0 +1,181 @@
+---
+title: "SmokingA Predictive Analysis of Coronary Heart Disease(CHD) Using Health and Lifestyle Variables"
+date: "2025-03-28"
+author: "Anteneh G. Yitayal 256983"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE,
+message=FALSE,
+tidy.opts=list(width.cutoff = 80),
+tidy = FALSE)
+```
+
+## Introduction
+
+1.  sex: Categorical variable indicating the gender of the individual (e.g., "Male" or "Female").
+2.  age: Numeric variable representing the age of the individual (in years).
+3.  education: Numeric variable representing the education level, possibly on a scale (e.g., 1 = low, 4 = high).
+4.  smoker: Binary numeric variable indicating whether the individual is a smoker (1 = yes, 0 = no).
+5.  cpd: Numeric variable representing cigarettes per day, relevant if the individual is a smoker.
+6.  stroke: Binary numeric variable indicating whether the individual has had a stroke (1 = yes, 0 = no).
+7.  HTN (Hypertension): Binary numeric variable indicating the presence of hypertension (1 = yes, 0 = no).
+8.  diabetes: Binary numeric variable indicating whether the individual has diabetes (1 = yes, 0 = no).
+9.  chol (Cholesterol): Numeric variable representing the individual's cholesterol level (in mg/dL).
+10. DBP (Diastolic Blood Pressure): Numeric variable indicating the individual’s diastolic blood pressure (in mmHg).
+11. BMI (Body Mass Index): Numeric variable representing the individual's BMI, which is a measure of body fat based on height and weight.
+12. HR (Heart Rate): Numeric variable representing the individual's resting heart rate (in beats per minute).
+13. CHD (Coronary Heart Disease): Categorical target variable indicating whether the individual has coronary heart disease ("Yes" or "No").
+
+```{r, include=FALSE}
+library(tidyverse)
+if (!require(ROCR)) {
+    install.packages(ROCR)
+    library(ROCR)
+}
+```
+
+The data set consists of 4,238 observations and 13 attributes related to cardiovascular health, specifically focusing on risk factors for Coronary Heart Disease (CHD). The attributes include demographic information such as sex and age, lifestyle factors like smoker and cigarettes per day (cpd), and clinical data such as hypertension (HTN), diabetes, cholesterol (chol), diastolic blood pressure (DBP), body mass index (BMI), and heart rate (HR). The data set also includes education level and a target variable CHD, indicating whether the individual has Coronary Heart Disease ("Yes" or "No"). This data set provides a comprehensive set of features that can be used for predictive modeling and analysis of factors influencing CHD risk.
+
+```{r, include=FALSE}
+#load the data set and view data
+chd_df <- read_csv("chd.csv", show_col_types = FALSE)
+data_size = dim(chd_df)
+View(chd_df)
+sprintf("Records: %d Features: %d", data_size[1], data_size[2])
+```
+
+The data set has a total of 204 missing values, with education level accounting for 51% of the missing records. This suggests that a significant portion of the missing data is concentrated in the education attribute. Addressing these missing values is crucial for ensuring the accuracy of any analysis, and potential strategies include imputation (replacing missing values with estimates) or removing rows with missing values, depending on the analysis approach.
+
+```{r, include=FALSE}
+#check missing values
+check_missing_values <- function(data) {
+  sprintf("#NaN values: %d", sum(is.na(data)))
+  colSums(is.na(data))
+}
+
+check_missing_values(chd_df)
+```
+
+```{r}
+data_df <- na.omit(chd_df)
+check_missing_values(data_df)
+dim(data_df)
+```
+
+```{r, include=FALSE}
+# convert categorical into factor
+data_df$sex <- as.factor(data_df$sex)
+data_df$smoker <- as.factor(data_df$smoker)
+data_df$stroke <- as.factor(data_df$stroke)
+data_df$HTN <- as.factor(data_df$HTN)
+data_df$diabetes <- as.factor(data_df$diabetes)
+data_df$HTN <- as.factor(data_df$HTN)
+data_df$education <- as.factor(data_df$education)
+
+# Convert CHD to a binary factor (0 = No CHD, 1 = CHD)
+data_df$CHD <- as.factor(data_df$CHD)
+
+#check structure again
+str(data_df)
+```
+
+```{r, include=FALSE}
+summary(data_df)
+```
+
+```{r}
+#check structure and compute Pearson's r correlation
+str(data_df)
+cor(dplyr::select(data_df, age, cpd, chol, DBP, BMI, HR))
+
+```
+
+About 85% of the data belongs to no chd, which is common in most medical datasets, such class imbalance ...
+
+```{r}
+ggplot(data = data_df, aes(x = CHD)) +
+  geom_bar(fill="skyblue", color="black") +
+  labs(title="Distribution of Coronary Heart Disease(CHD)", x = "CHD", y ="Frequency")
+
+prop.table(table(data_df$CHD))
+```
+
+```{r}
+#our target variable is CHD, let's analyze it's relation with the other attributes
+# proportion of chd between male and female
+ggplot(data = data_df, aes(x = sex, fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Sex vs CHD",x = "Sex", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$sex, data_df$CHD))
+```
+
+```{r}
+str(data_df)
+```
+Most people start perimenopause in their late 40s. You officially reach menopause after you haven't had a period for one year. On average, Dr. Cole said people typically reach menopause between ages 51 and 52, but that varies from person to person.
+```{r}
+# seems like on average those who got chd are older than those who don't 
+ggplot(data = data_df, aes(x = CHD, y = age)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Boxplot of Age by CHD", x = "CHD", y = "Age")
+
+ggplot(data = data_df, aes(x = CHD, y = age, fill = sex)) +
+  geom_boxplot(color = "black") +
+  labs(title = "Boxplot of Age by CHD and Sex", x = "CHD", y = "Age") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal()
+
+
+ggplot(data = data_df, aes(x = education, fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Education Levels vs CHD",x = "Education Level", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$education, data_df$CHD))
+
+# smoking seems doesn't have an effect on getting chd based on the data
+ggplot(data = data_df, aes(x = factor(smoker, levels = c(0, 1), labels = c("No", "Yes")), fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Smoker vs CHD",x = "Smoker", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$smoker, data_df$CHD))
+
+# stroke seems not an issue
+ggplot(data = data_df, aes(x = factor(stroke, levels = c(0, 1), labels = c("No", "Yes")), fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Stroke vs CHD",x = "Stroke", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$stroke, data_df$CHD))
+
+#hypertension almost no effect
+ggplot(data = data_df, aes(x = factor(HTN, levels = c(0, 1), labels = c("No", "Yes")), fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Hypertension vs CHD",x = "Hypertension", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$HTN, data_df$CHD))
+```
+
+### Methods
+
+### Results and Discussion
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+### Conclusion
