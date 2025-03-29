@@ -1,5 +1,5 @@
 ---
-title: "SmokingA Predictive Analysis of Coronary Heart Disease(CHD) Using Health and Lifestyle Variables"
+title: "A Predictive Analysis of Coronary Heart Disease(CHD) Using Health and Lifestyle Variables"
 date: "2025-03-28"
 author: "Anteneh G. Yitayal 256983"
 output:
@@ -97,6 +97,7 @@ cor(dplyr::select(data_df, age, cpd, chol, DBP, BMI, HR))
 About 85% of the data belongs to no chd, which is common in most medical datasets, such class imbalance ...
 
 ```{r}
+# a high class imbalance between the target class
 ggplot(data = data_df, aes(x = CHD)) +
   geom_bar(fill="skyblue", color="black") +
   labs(title="Distribution of Coronary Heart Disease(CHD)", x = "CHD", y ="Frequency")
@@ -118,20 +119,27 @@ prop.table(table(data_df$sex, data_df$CHD))
 ```{r}
 str(data_df)
 ```
+
 Most people start perimenopause in their late 40s. You officially reach menopause after you haven't had a period for one year. On average, Dr. Cole said people typically reach menopause between ages 51 and 52, but that varies from person to person.
-```{r}
+
+```{r, fig.width=10, fig.height=4, fig.cap="Figure 1: your caption here.", fig.align="center"}
 # seems like on average those who got chd are older than those who don't 
 ggplot(data = data_df, aes(x = CHD, y = age)) +
   geom_boxplot(fill = "skyblue", color = "black") +
-  labs(title = "Boxplot of Age by CHD", x = "CHD", y = "Age")
+  labs(title = "Age by CHD", x = "CHD", y = "Age")
 
+#age and sex make sense; which is normally high for male but as menopause starts it's getting worst for females
 ggplot(data = data_df, aes(x = CHD, y = age, fill = sex)) +
   geom_boxplot(color = "black") +
-  labs(title = "Boxplot of Age by CHD and Sex", x = "CHD", y = "Age") +
+  labs(title = "Age by CHD and Sex", x = "CHD", y = "Age") +
   scale_fill_manual(values = c("skyblue", "lightpink")) + 
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
 
-
+#biased towards general public (less college degree) so not appropriate to compare
 ggplot(data = data_df, aes(x = education, fill = CHD)) + 
   geom_bar(color = "black") +
   labs(title = "Education Levels vs CHD",x = "Education Level", y = "Frequency") +
@@ -162,9 +170,170 @@ ggplot(data = data_df, aes(x = factor(HTN, levels = c(0, 1), labels = c("No", "Y
   scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
 
 prop.table(table(data_df$HTN, data_df$CHD))
+
+#not clear 
+ggplot(data = data_df, aes(x = factor(diabetes, levels = c(0, 1), labels = c("No", "Yes")), fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Diabetes vs CHD",x = "Diabetes", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+
+prop.table(table(data_df$diabetes, data_df$CHD))
+  
+
+#people who developed chd tends to have higher cholesterol level on average and there are more extreme cholesterol in those who developed
+ggplot(data = data_df, aes(x = CHD, y = chol)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Cholestrol Level and CHD", x = "CHD", y = "Cholestrol Level") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal()
+
+#similar trend as cholesterol level
+ggplot(data = data_df, aes(x = CHD, y = DBP)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Diastolic blood pressure and CHD", x = "CHD", y = "Diastolic blood pressure Level") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal()
+
+#similar trend as cholesterol level
+ggplot(data = data_df, aes(x = CHD, y = BMI)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Body Mass Index and CHD", x = "CHD", y = "Body Mass Index") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal()
+
+#similar trend as cholesterol level
+ggplot(data = data_df, aes(x = CHD, y = HR)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Heart Rate and CHD", x = "CHD", y = "Heart Rate") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) +
+  theme_minimal()
+
+ggplot(data = data_df, aes(x = CHD, y = cpd)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Cigarettes per day and CHD", x = "CHD", y = "Cigarettes per day") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) +
+  theme_minimal()
+
+
+ggplot(data = data_df, aes(x = age, y = chol, color = CHD)) +
+  geom_line(size = 1) +
+  labs(title = "Yearly Values Trend", x = "Year", y = "Value") +
+  theme_minimal()
+```
+
+```{r}
+library(caret)
+
+#set seed, and create train test split with stratified sampling
+set.seed(123) 
+train_size = 0.7
+trainIndex <- createDataPartition(data_df$CHD, p = train_size, list = FALSE)
+
+train_set <- data_df[trainIndex, ]
+test_set <- data_df[-trainIndex, ]
+
+# Check class distribution in train and test sets:
+table(train_set$CHD) / nrow(train_set)
+table(test_set$CHD) / nrow(test_set)
+
+#str(train_set)
+
 ```
 
 ### Methods
+
+```{r}
+#fit with all features 
+log_reg_all <- glm(CHD ~ .,
+    data = train_set,
+    family = binomial
+)
+
+summary(log_reg_all)
+```
+
+#### Logistic Regression
+
+```{r}
+#fit with significant features and the AIC: Drops so this is better than the model with all features
+log_reg_sig <- glm(CHD ~ sex + age + cpd + HTN + diabetes + DBP,
+    data = train_set,
+    family = binomial
+)
+
+summary(log_reg_sig)
+```
+```{r}
+#to see the effect of menopause, a new variable is create 1 if female and aged greater than 45, no significant for this data
+log_reg_sig_menopause <- glm(CHD ~ age + age:sex + cpd + HTN + diabetes + DBP, 
+             family = binomial, data = train_set)
+summary(log_reg_sig_menopause)
+```
+
+```{r}
+#compare the two models with AIC (goodness of fit + model complexity)
+AIC(log_reg_all, log_reg_sig, log_reg_sig_menopause)
+```
+
+```{r}
+# check the dummy variable for chd
+contrasts(train_set$CHD)
+
+#predict the test dataset
+test_chd = test_set$CHD
+glm.probs <- predict(log_reg_sig_menopause, newdata = test_set, type = "response")
+glm.probs[1:10]
+
+#set threshold and fill the placeholder
+threshold = 0.5
+glm.pred <- rep("No", nrow(test_set)) # A "placeholder" filled with as many No values as the number of observations (rows) in test_data
+glm.pred[glm.probs > 0.5] <- "Yes" # replace with Yes values according to the glm.probs threshold
+
+# confusion matrix
+confusion_matrix <- table(glm.pred, test_chd)
+confusion_matrix
+
+# accuracy
+mean(glm.pred == test_chd)
+# error
+mean(glm.pred != test_chd)
+```
+
+```{r}
+# compute the prediction and plot ROC curve
+predob <- ROCR::prediction(glm.probs, test_chd)
+# then we need a "performance" object for roc and auc
+perf <- ROCR::performance(predob, "tpr", "fpr")
+auc_perf <- ROCR::performance(predob, measure = "auc")
+
+auc_value = unlist(auc_perf@y.values)
+
+# now the plot!
+roc_data <- data.frame(
+  fpr = unlist(perf@x.values),  # False Positive Rate
+  tpr = unlist(perf@y.values)   # True Positive Rate
+)
+
+ggplot(roc_data, aes(x = fpr, y = tpr)) +
+  geom_line(color = "blue", size = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +
+  labs(
+    title = paste("Logistic Regression ROC Curve (AUC =", round(auc_value, 3), ")"),
+    x = "False Positive Rate (FPR)",
+    y = "True Positive Rate (TPR)"
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
+```
+
+
+#### KNN
+```{r}
+
+```
 
 ### Results and Discussion
 
