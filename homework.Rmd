@@ -1,10 +1,11 @@
 ---
-title: "A Predictive Analysis of Coronary Heart Disease(CHD) Using Health and Lifestyle Variables"
-date: "2025-03-28"
+title: A Predictive Analysis of Coronary Heart Disease(CHD) Using Health and Lifestyle
+  Variables
 author: "Anteneh G. Yitayal 256983"
+date: "2025-03-28"
 output:
-  pdf_document:
-    latex_engine: xelatex
+    pdf_document:
+      latex_engine: xelatex
 ---
 
 ```{r setup, include=FALSE}
@@ -14,41 +15,41 @@ tidy.opts=list(width.cutoff = 80),
 tidy = FALSE)
 ```
 
-## Introduction
-
-1.  sex: Categorical variable indicating the gender of the individual (e.g., "Male" or "Female").
-2.  age: Numeric variable representing the age of the individual (in years).
-3.  education: Numeric variable representing the education level, possibly on a scale (e.g., 1 = low, 4 = high).
-4.  smoker: Binary numeric variable indicating whether the individual is a smoker (1 = yes, 0 = no).
-5.  cpd: Numeric variable representing cigarettes per day, relevant if the individual is a smoker.
-6.  stroke: Binary numeric variable indicating whether the individual has had a stroke (1 = yes, 0 = no).
-7.  HTN (Hypertension): Binary numeric variable indicating the presence of hypertension (1 = yes, 0 = no).
-8.  diabetes: Binary numeric variable indicating whether the individual has diabetes (1 = yes, 0 = no).
-9.  chol (Cholesterol): Numeric variable representing the individual's cholesterol level (in mg/dL).
-10. DBP (Diastolic Blood Pressure): Numeric variable indicating the individual’s diastolic blood pressure (in mmHg).
-11. BMI (Body Mass Index): Numeric variable representing the individual's BMI, which is a measure of body fat based on height and weight.
-12. HR (Heart Rate): Numeric variable representing the individual's resting heart rate (in beats per minute).
-13. CHD (Coronary Heart Disease): Categorical target variable indicating whether the individual has coronary heart disease ("Yes" or "No").
-
 ```{r, include=FALSE}
+library(pROC)
+library(caret)
 library(tidyverse)
+library(class)
+library(ggplot2)
 if (!require(ROCR)) {
     install.packages(ROCR)
     library(ROCR)
 }
 ```
 
+## Introduction
+
+Coronary Heart Disease (CHD), also known as coronary artery disease (CAD) is a condition in which the coronary arteries (the blood vessels that supply oxygen-rich blood to the heart) become narrowed or blocked. This happens due to the buildup of plaque, a combination of fat, cholesterol, calcium, and other substances, on the artery walls, a process known as atherosclerosis.
+
+CHD is one of the leading causes of death worldwide. It increases the risk of heart attacks, heart failure, and other cardiovascular complications [1]. The condition often develops over decades, and many people may not realize they have it until they experience symptoms like chest pain (angina), shortness of breath, or a heart attack.
+
+## Objective
+
+The objective of this analysis is to identify key risk factors associated with Coronary Heart Disease (CHD) and compare the predictive performance of logistic regression and k-Nearest Neighbors (KNN). The study aims to assess the impact of demographic, health, and lifestyle factors on CHD risk while evaluating the differences between a parametric model (logistic regression) and a non-parametric model (KNN) in terms of recall, AUC-ROC, and accuracy.
+
+## Data set
+
 The data set consists of 4,238 observations and 13 attributes related to cardiovascular health, specifically focusing on risk factors for Coronary Heart Disease (CHD). The attributes include demographic information such as sex and age, lifestyle factors like smoker and cigarettes per day (cpd), and clinical data such as hypertension (HTN), diabetes, cholesterol (chol), diastolic blood pressure (DBP), body mass index (BMI), and heart rate (HR). The data set also includes education level and a target variable CHD, indicating whether the individual has Coronary Heart Disease ("Yes" or "No"). This data set provides a comprehensive set of features that can be used for predictive modeling and analysis of factors influencing CHD risk.
 
-```{r, include=FALSE}
+```{r, include=FALSE, echo=FALSE}
 #load the data set and view data
 chd_df <- read_csv("chd.csv", show_col_types = FALSE)
 data_size = dim(chd_df)
-View(chd_df)
+#View(chd_df)
 sprintf("Records: %d Features: %d", data_size[1], data_size[2])
 ```
 
-The data set has a total of 204 missing values, with education level accounting for 51% of the missing records. This suggests that a significant portion of the missing data is concentrated in the education attribute. Addressing these missing values is crucial for ensuring the accuracy of any analysis, and potential strategies include imputation (replacing missing values with estimates) or removing rows with missing values, depending on the analysis approach.
+The data set contains a total of 204 missing values, with education level accounting for 51% of them. This indicates that a significant portion of the missing data is concentrated in the education attribute. To ensure the accuracy of the analysis, handling these missing values is essential. Possible approaches include imputation (estimating and replacing missing values) or removal of affected rows. However, since the number of missing values is relatively small, the affected rows have been removed for this analysis.
 
 ```{r, include=FALSE}
 #check missing values
@@ -60,13 +61,13 @@ check_missing_values <- function(data) {
 check_missing_values(chd_df)
 ```
 
-```{r}
+```{r, include=FALSE, echo=FALSE}
 data_df <- na.omit(chd_df)
 check_missing_values(data_df)
 dim(data_df)
 ```
 
-```{r, include=FALSE}
+```{r, include=FALSE, echo=FALSE}
 # convert categorical into factor
 data_df$sex <- as.factor(data_df$sex)
 data_df$smoker <- as.factor(data_df$smoker)
@@ -83,46 +84,100 @@ data_df$CHD <- as.factor(data_df$CHD)
 str(data_df)
 ```
 
-```{r, include=FALSE}
+```{r, include=FALSE, echo=FALSE}
 summary(data_df)
 ```
 
-```{r}
+```{r, include=FALSE, echo=FALSE}
 #check structure and compute Pearson's r correlation
 str(data_df)
-cor(dplyr::select(data_df, age, cpd, chol, DBP, BMI, HR))
+correlation <- cor(dplyr::select(data_df, age, cpd, chol, DBP, BMI, HR))
+correlation
+#DBP and BMI (0.38): This is a moderate positive correlation. This suggests that higher blood pressure tends to be associated with higher BMI, which is a common finding in #health data (e.g., obesity is linked with high blood pressure).Age and Cholesterol (0.27): This is a moderate positive correlation. As age increases, cholesterol levels #tend to increase as well. This is worth noting since age is a known risk factor for heart-related conditions.
 
 ```
 
-About 85% of the data belongs to no chd, which is common in most medical datasets, such class imbalance ...
+## Exploratory Data Analysis
 
-```{r}
+There is a significant class imbalance in the target variable, with approximately 85% of the data belonging to the "No CHD" category as shown in figure 1. This imbalance is common in medical data sets and can affect model performance by favoring the majority class. To address this, specialized evaluation metrics such as AUC-ROC and recall were used instead of re-sampling techniques. These metrics are commonly used to provide better assessment of model performance in imbalanced scenarios [2].
+
+```{r fig1,  echo=FALSE, fig.width=10, fig.height=4, fig.cap="Distribution of Coronary Heart Disease(CHD).", fig.align="center"}
 # a high class imbalance between the target class
 ggplot(data = data_df, aes(x = CHD)) +
   geom_bar(fill="skyblue", color="black") +
-  labs(title="Distribution of Coronary Heart Disease(CHD)", x = "CHD", y ="Frequency")
-
-prop.table(table(data_df$CHD))
+  labs(title="Distribution of Coronary Heart Disease(CHD)", x = "CHD", y ="Frequency") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
+#prop.table(table(data_df$CHD))
 ```
 
-```{r}
+The box plot in figure 2 illustrates the distribution of age across individuals with and without coronary heart disease (CHD), categorized by sex. Overall, individuals diagnosed with CHD tend to be older than those without the condition, as evidenced by the higher median age in the "Yes" CHD group. Additionally, the boxes (representing the interquartile range) are larger for the CHD group, indicating more variability in age.
+
+For both CHD "Yes" and "No" groups, the age distributions between males and females are fairly similar. However, there is a slight tendency for females with CHD to have a higher median age compared to males with CHD, which might lined with menopause. Overall, the relationship between age and CHD appears to hold true regardless of sex.
+
+```{r fig2, echo=FALSE, fig.width=10, fig.height=4, fig.cap="\\label{fig:fig2} Distribution of Coronary Heart Disease(CHD) with age between male and female.", fig.align="center"}
+#age and sex make sense; which is normally high for male but as menopause starts it's getting worst for females
+ggplot(data = data_df, aes(x = CHD, y = age, fill = sex)) +
+  geom_boxplot(color = "black") +
+  labs(title = "Age by CHD and Sex", x = "CHD", y = "Age") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
+```
+
+Another interesting insight from the data is that CHD tends to be more prevalent among individuals with lower education levels as shown in figure 3. This may be linked to factors such as income and standard of living—typically, the more education a person has, the higher their income, which in turn may lead to better overall health and reduced risk of conditions like CHD. The effect of smoking appears insignificant based on the current data, seeking further investigation using logistic regression or other appropriate statistical tests. Figure 4 suggests a potential association between slightly elevated diastolic blood pressure and an increased risk of Coronary Heart Disease (CHD). Additionally, while extreme blood pressure levels were observed in both the "Yes" and "No" CHD groups, the distribution of cholesterol levels and body mass index appeared similar across both groups.
+
+```{r fig3, echo=FALSE, fig.width=10, fig.height=4, fig.cap="\\label{fig:fig3} Distribution of Coronary Heart Disease(CHD) with education level.", fig.align="center"}
+#biased towards general public (less college degree) so not appropriate to compare
+ggplot(data = data_df, aes(x = factor(education, levels=c(1, 2, 3, 4), labels=c("No high school", "High school graduate", "College graduate", "Post-college")), fill = CHD)) + 
+  geom_bar(color = "black") +
+  labs(title = "Education Levels vs CHD",x = "Education Level", y = "Frequency") +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato")) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
+```
+
+```{r fig4, echo=FALSE, fig.width=10, fig.height=4, fig.cap="\\label{fig:fig4} Distribution of Coronary Heart Disease(CHD) with Diastolic blood pressure.", fig.align="center"}
+ggplot(data = data_df, aes(x = CHD, y = DBP)) +
+  geom_boxplot(color = "black", fill="skyblue") +
+  labs(title = "Diastolic blood pressure and CHD", x = "CHD", y = "Diastolic blood pressure") +
+  scale_fill_manual(values = c("skyblue", "lightpink")) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
+```
+
+```{r, include=FALSE, echo=FALSE}
 #our target variable is CHD, let's analyze it's relation with the other attributes
 # proportion of chd between male and female
 ggplot(data = data_df, aes(x = sex, fill = CHD)) + 
   geom_bar(color = "black") +
   labs(title = "Sex vs CHD",x = "Sex", y = "Frequency") +
   scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
 
 prop.table(table(data_df$sex, data_df$CHD))
 ```
 
-```{r}
+```{r, include=FALSE, echo=FALSE}
 str(data_df)
 ```
 
-Most people start perimenopause in their late 40s. You officially reach menopause after you haven't had a period for one year. On average, Dr. Cole said people typically reach menopause between ages 51 and 52, but that varies from person to person.
-
-```{r, fig.width=10, fig.height=4, fig.cap="Figure 1: your caption here.", fig.align="center"}
+```{r, echo=FALSE, include=FALSE, fig.width=10, fig.height=4, fig.cap="your caption here.", fig.align="center"}
 # seems like on average those who got chd are older than those who don't 
 ggplot(data = data_df, aes(x = CHD, y = age)) +
   geom_boxplot(fill = "skyblue", color = "black") +
@@ -140,10 +195,14 @@ ggplot(data = data_df, aes(x = CHD, y = age, fill = sex)) +
   )
 
 #biased towards general public (less college degree) so not appropriate to compare
-ggplot(data = data_df, aes(x = education, fill = CHD)) + 
+ggplot(data = data_df, aes(x = factor(education, levels=c(1, 2, 3, 4), labels=c("No high school", "High school graduate", "College graduate", "Post-college")), fill = CHD)) + 
   geom_bar(color = "black") +
   labs(title = "Education Levels vs CHD",x = "Education Level", y = "Frequency") +
-  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato"))
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "tomato")) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12)
+  )
 
 prop.table(table(data_df$education, data_df$CHD))
 
@@ -221,26 +280,51 @@ ggplot(data = data_df, aes(x = age, y = chol, color = CHD)) +
   theme_minimal()
 ```
 
-```{r}
-library(caret)
+## Methods
 
-#set seed, and create train test split with stratified sampling
-set.seed(123) 
-train_size = 0.7
-trainIndex <- createDataPartition(data_df$CHD, p = train_size, list = FALSE)
+The data set is split into training and testing sets using stratified sampling, ensuring that the class distribution of the target attribute is maintained. The training set comprises 70% of the data, while the testing set accounts for the remaining 30%.
 
-train_set <- data_df[trainIndex, ]
-test_set <- data_df[-trainIndex, ]
+```{r echo=FALSE, include=FALSE}
+split_data <- function(data, train_size) {
+  # Set seed for reproducibility
+  set.seed(123) 
+  
+  # Create train-test split with stratified sampling
+  trainIndex <- createDataPartition(data$CHD, p = train_size, list = FALSE)
+  
+  train_set <- data[trainIndex, ]
+  test_set <- data[-trainIndex, ]
+  
+  # Check class distribution in train and test sets
+  print(table(train_set$CHD) / nrow(train_set))
+  print(table(test_set$CHD) / nrow(test_set))
+  
+  # Return as a list
+  return(list(train = train_set, test = test_set))
+}
 
-# Check class distribution in train and test sets:
-table(train_set$CHD) / nrow(train_set)
-table(test_set$CHD) / nrow(test_set)
+# split the data
+train_test_set <- split_data(data = data_df, train_size = 0.7)
 
-#str(train_set)
-
+# Access train and test sets
+train_set <- train_test_set$train
+test_set <- train_test_set$test
 ```
 
-### Methods
+### Logistic Regression
+
+The logistic regression model predicts the likelihood of Coronary Heart Disease (CHD) using various risk factors, as shown in Equation \eqref{eq:logit_model}. Significant predictors include male sex, age, cigarettes per day (cpd), hypertension (HTN1), diabetes (diabetes1), and diastolic blood pressure (DBP), all of which increase CHD risk.
+
+The model shows that age ($\beta = 0.07$, $p < 0.001$) and male sex ($\beta = 0.45$, $p < 0.001$) are strong predictors, indicating that older individuals and males are at higher risk. While smoking status is not statistically significant, the number of cigarettes per day (cpd) ($\beta = 0.02$, $p = 0.0026$) has a significant positive effect, suggesting that smoking intensity matters more than simply being a smoker.
+
+Other variables such as education level, cholesterol, BMI, and heart rate do not significantly impact CHD risk in this model. The model demonstrates a good fit, as indicated by the reduction in deviance compared to the null model. These findings suggest that controlling factors like smoking intensity, hypertension, and diabetes could be key strategies in CHD prevention.
+
+\begin{equation}
+\text{logit}(\mathbb{E}(\text{CHD})) = \beta_0 + \beta_1 (\text{sex}) + \beta_2 (\text{age}) + \beta_3 (\text{education}) + \dots + \beta_{12} (\text{HR})
+\label{eq:logit_model}
+\end{equation}
+
+Since the data is imbalanced, adjusting the classification threshold for predicting CHD is necessary. This can be done by plotting the true positive rate (i.e., recall) against a range of possible threshold values. The goal is to maximize the correct classification of CHD cases while avoiding classifying all samples as CHD.
 
 ```{r}
 #fit with all features 
@@ -252,99 +336,267 @@ log_reg_all <- glm(CHD ~ .,
 summary(log_reg_all)
 ```
 
-#### Logistic Regression
+### K-Nearest Neighbor (KNN)
 
-```{r}
-#fit with significant features and the AIC: Drops so this is better than the model with all features
-log_reg_sig <- glm(CHD ~ sex + age + cpd + HTN + diabetes + DBP,
-    data = train_set,
-    family = binomial
-)
+KNN is applied to compare its performance with logistic regression in terms of maximizing the true positive rate and minimizing false negatives. Missing CHD "Yes" cases could result in misdiagnosing individuals with CHD as healthy, potentially leading to severe health risks or even loss of life. In contrast, false positives, while undesirable, are less costly in comparison.
 
-summary(log_reg_sig)
-```
-```{r}
-#to see the effect of menopause, a new variable is create 1 if female and aged greater than 45, no significant for this data
-log_reg_sig_menopause <- glm(CHD ~ age + age:sex + cpd + HTN + diabetes + DBP, 
-             family = binomial, data = train_set)
-summary(log_reg_sig_menopause)
-```
+All available attributes have been used in the model. Binary categorical variables, such as sex, are mapped to numerical values (e.g., 0 and 1). However, for education level, one-hot encoding is applied since it has more than two categories, preventing the model from assuming an ordinal relationship between education levels and the likelihood of developing CHD, as no such relationship is established. Continuous variables are standardized to mitigate the impact of different numerical scales on distance calculations in KNN. Without standardization, features with larger numerical ranges could disproportionately influence the model. To address this, the training set is standardized, and the same mean and standard deviation are applied to the test set to ensure consistency, as machine learning models generally assume that training and testing data come from the same distribution.
 
-```{r}
-#compare the two models with AIC (goodness of fit + model complexity)
-AIC(log_reg_all, log_reg_sig, log_reg_sig_menopause)
-```
+Given the imbalanced nature of the data, accuracy or error rate alone does not provide meaningful insights into the model’s ability to identify CHD "Yes" cases. Instead, recall is prioritized to select the optimal K, ensuring that at least 80% of CHD "Yes" cases are correctly identified while allowing some tolerance for false positives.
 
-```{r}
-# check the dummy variable for chd
-contrasts(train_set$CHD)
+```{r, echo=FALSE, include=FALSE}
+#str(data_df)
+#Convert categorical into number not factors
+data_df$sex <- as.numeric(data_df$sex) - 1
+data_df$CHD <- as.numeric(data_df$CHD) - 1
 
-#predict the test dataset
-test_chd = test_set$CHD
-glm.probs <- predict(log_reg_sig_menopause, newdata = test_set, type = "response")
-glm.probs[1:10]
+#Apply one-hot encoding for education level
+dummies <- dummyVars(~ education, data = data_df)
+education_on_hot <- data.frame(predict(dummies, newdata = data_df))
 
-#set threshold and fill the placeholder
-threshold = 0.5
-glm.pred <- rep("No", nrow(test_set)) # A "placeholder" filled with as many No values as the number of observations (rows) in test_data
-glm.pred[glm.probs > 0.5] <- "Yes" # replace with Yes values according to the glm.probs threshold
+#Remove the original "education" column from data_df
+data_df <- dplyr::select(data_df, -education)
 
-# confusion matrix
-confusion_matrix <- table(glm.pred, test_chd)
-confusion_matrix
+#Merge back the new one-hot encoded columns to the data_df
+data_final_df <- cbind(data_df, education_on_hot)
 
-# accuracy
-mean(glm.pred == test_chd)
-# error
-mean(glm.pred != test_chd)
-```
+#split the data into train and test
+train_test_set_knn <- split_data(data = data_df, train_size = 0.7)
 
-```{r}
-# compute the prediction and plot ROC curve
-predob <- ROCR::prediction(glm.probs, test_chd)
-# then we need a "performance" object for roc and auc
-perf <- ROCR::performance(predob, "tpr", "fpr")
-auc_perf <- ROCR::performance(predob, measure = "auc")
+# Access train and test sets
+train_set_knn <- train_test_set_knn$train
+test_set_knn <- train_test_set_knn$test
 
-auc_value = unlist(auc_perf@y.values)
+# to put continuous variables on the same scale
+standardize = TRUE
 
-# now the plot!
-roc_data <- data.frame(
-  fpr = unlist(perf@x.values),  # False Positive Rate
-  tpr = unlist(perf@y.values)   # True Positive Rate
-)
+cont_variables = c("age", "BMI", "DBP", "chol", "cpd", "HR")
 
-ggplot(roc_data, aes(x = fpr, y = tpr)) +
-  geom_line(color = "blue", size = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +
-  labs(
-    title = paste("Logistic Regression ROC Curve (AUC =", round(auc_value, 3), ")"),
-    x = "False Positive Rate (FPR)",
-    y = "True Positive Rate (TPR)"
-  ) +
-  theme_minimal() + 
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14),
-    axis.title = element_text(size = 12)
-  )
-```
+if(standardize) {
 
+  train_set[, cont_variables] <- scale(train_set[, cont_variables])
+  test_set[, cont_variables] <- scale(test_set[, cont_variables], 
+                                      center = colMeans(train_set[, cont_variables]), 
+                                      scale = apply(train_set[, cont_variables], 2, sd))
+}
 
-#### KNN
-```{r}
-
+y_train <- train_set$CHD
+x_train <- dplyr::select(train_set, cont_variables)
+x_test <- dplyr::select(test_set, cont_variables)
+y_test <- test_set$CHD
 ```
 
 ### Results and Discussion
 
-## Including Plots
+The primary evaluation metrics for this task are recall and AUC-ROC, with accuracy also considered. Given the class imbalance in the dataset, recall is crucial for correctly identifying CHD cases, while AUC-ROC provides a comprehensive measure of the model’s ability to distinguish between classes. I trained both models, evaluated them on the test set, and tested a range of K values for KNN (Figure 6) and threshold values for logistic regression (Figure 7). The optimal values were selected based on achieving an 80% true positive rate for the CHD "Yes" class, resulting in a threshold, within the range indicated by two dotted red vertical lines which give 80% true positive rate, 0.1039 for logistic regression and K=7 for KNN.
 
-You can also embed plots, for example:
+```{r, echo=FALSE, fig.width=10, fig.height=4, fig.cap="Logistic Regression ROC Curve.", fig.align="center"}
+# check the dummy variable for chd
+#contrasts(train_set$CHD)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#predict the test dataset
+log_pred_probs <- predict(log_reg_all, newdata = test_set, type = "response")
+
+# A function to plot roc for logistic regression
+plot_roc_logistic <- function (fpr, tpr, auc_value) {
+  ggplot(roc_data, aes(x = fpr, y = tpr)) +
+    geom_line(color = "blue", size = 1) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +
+    labs(
+      title = paste("Logistic Regression ROC Curve (AUC =", round(auc_value, 3), ")"),
+      x = "False Positive Rate (FPR)",
+      y = "True Positive Rate (TPR)"
+    ) +
+    theme_minimal() + 
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 14),
+      axis.title = element_text(size = 12)
+    )
+}
+
+# Compute ROC curve
+roc_obj <- roc(test_set$CHD, log_pred_probs)
+
+roc_data <- data.frame(
+  thresholds = roc_obj$thresholds,
+  TPR = roc_obj$sensitivities, #Recall
+  FPR = 1 - roc_obj$specificities #FPR
+)
+
+#remove the -inf threshold (all predicted as chd yes)
+roc_data <- roc_data[roc_data$thresholds != -Inf, ]
+
+#plot logic roc curve
+plot_roc_logistic(roc_data$FPR, roc_data$TPR, roc_obj$auc)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r, echo=FALSE, fig.width=10, fig.height=4, fig.cap="Recall vs Possible values of thresholds", fig.align="center"}
+#Plot recall vs thresholds
+plot_recall_vs_thresholds <- function(data, pick_threshold = 0.5) {
+  ggplot(data, aes(x = thresholds, y = TPR)) +
+      geom_line(color = "blue", size = 1) +
+      geom_vline(xintercept = pick_threshold, linetype = "dashed", color = "red") +
+      labs(
+        title = paste("Logistic Regression Recall Vs Thresholds"),
+        x = "Thresholds",
+        y = "Recall"
+      ) +
+      theme_minimal() + 
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 14),
+        axis.title = element_text(size = 12)
+      )
+}
+
+#plot recall over set of threshold values
+#plot_recall_vs_thresholds(roc_data)
+
+#set the threshold that maximize TPR
+threshold <- roc_data$thresholds[roc_data$TPR >= 0.8]
+threshold_top <- c(min(threshold), max(threshold))
+#print(c("Threshold", threshold_top))
+
+#plot recall over set of thresholds with a reference threshold = 0.1
+plot_recall_vs_thresholds(roc_data, threshold_top)
+
+# Compute the prediction based on the specified threshold
+log_preds <- rep("No", nrow(test_set)) # A "placeholder" filled with as many No values as the number of observations
+log_preds[log_pred_probs > threshold_top[2]] <- "Yes" # replace with Yes values according to the log_probs threshold
+
+# confusion matrix
+confusion_matrix <- table(log_preds, test_set$CHD)
+#confusion_matrix
+
+# accuracy, which is not a good indicator of fit for imbalance data but we now biased towards the Yes class it's fair
+# True Positives (TP) - Correctly predicted "Yes"
+TP <- sum(log_preds == "Yes" & test_set$CHD == "Yes")
+
+# False Positives (FP) - Incorrectly predicted "Yes"
+FP <- sum(log_preds == "Yes" & test_set$CHD == "No")
+
+# Precision (Accuracy for "Yes" class)
+precision_yes <- TP / (TP + FP)
+#precision_yes
+
+#mean(log_preds == test_set$CHD)
+```
+
+The main concern when comparing models is not only correctly predicting the positive class but also minimizing false positives without compromising the true positive rate. The performance comparison between KNN and logistic regression highlights key differences in their ability to classify CHD cases. KNN, with K=7, achieved an accuracy of 19.1%, misclassifying a significant number of negative ("No") cases, with 960 false positives and 162 true positives. Its AUC-ROC score of 0.4953 suggests that the model's performance is close to random guessing. In contrast, logistic regression, with a threshold of 0.1039, demonstrated better performance, achieving an accuracy of 57.2% and an AUC-ROC score of 0.738, as shown in Figure 5. It correctly identified 145 true positives while reducing false positives to 482, compared to KNN, as shown in Table 1. Although logistic regression performs better overall, both models still struggle with class imbalance, as indicated by their relatively low accuracy and AUC-ROC scores.
+
+| Actual \\ Prediction | KNN-No | KNN-Yes | Logistic Regression-No | Logistic Regression-Yes |
+|------------------|-------------|-----------|--------------|-----------------|
+| No | 66 | 18 | 547 | 36 |
+| Yes | 963 | 163 | 482 | 145 |
+
+: Confusion Matrices for Logistic Regression vs KNN
+
+```{r, echo=FALSE, fig.width=10, fig.height=4, fig.cap="Recall vs Possible values of K.", fig.align="center"}
+#Pick odd number of k sample values
+k_values <- seq(3, 25, 2)
+k_recalls <- c()
+k_auc <- c()
+
+fit_knn_model <- function(k) {
+  #Fit KNN and get the probabilities of the wining class
+  knn_pred <- knn(x_train, x_test, y_train, prob = TRUE, k = k)
+  knn_prob <- attr(knn_pred, "prob")
+  #print(summary(knn_pred))
+  #Pick only the probability of yes
+  knn_prob <- ifelse(knn_pred == "Yes", knn_prob, 1 - knn_prob)  # Ensure positive class probability
+  
+  # Compute ROC and AUC
+  roc_obj <- roc(y_test, knn_prob)
+  
+  #Compute AUC value
+  auc_value <- auc(roc_obj)
+  
+  #Compute confusion matrix
+  conf_mat <- table(knn_pred, y_test)
+  
+  #recall (sensitivity)
+  recall <- conf_mat[4] / (conf_mat[4] + conf_mat[3])
+  
+  k_recalls <<- c(k_recalls, recall)
+  k_auc <<- c(k_auc, auc_value)
+}
+
+#Run knn for different k values and record recall and auc
+for (k in k_values) {
+  fit_knn_model(k)
+}
+
+recallk_df <- data.frame(k=k_values, recall=k_recalls)
+
+#Plot recall vs k
+plot_recall_vs_k <- function(data, pick_k = 3) {
+  ggplot(data, aes(x = k, y = recall)) +
+      geom_line(color = "blue", size = 1) +
+      geom_vline(xintercept = pick_k, linetype = "dashed", color = "red") +
+      scale_x_continuous(breaks = unique(c(data$k, pick_k))) +
+      labs(
+        title = paste("KNN Recall Vs Ks"),
+        x = "K",
+        y = "Recall"
+      ) +
+      theme_minimal() + 
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 14),
+        axis.title = element_text(size = 12)
+      )
+}
+
+#Plot recall (TPR) over possible odd k values
+#plot_recall_vs_k(recallk_df)
+
+#Pick k that give the 85% true positive rate for the yes class
+possible_k <- recallk_df[recallk_df$recall >= 0.8, ]$k
+threshold_top <- c(min(possible_k), max(possible_k))
+
+#possible_k
+
+#fit knn for threshold_top
+knn_k_top <- function(k) {
+ #Fit KNN and get the probabilities of the wining class
+  knn_pred <- knn(x_train, x_test, y_train, prob = TRUE, k = k)
+  knn_prob <- attr(knn_pred, "prob")
+  
+  #Pick only the probability of yes
+  knn_prob <- ifelse(knn_pred == "Yes", knn_prob, 1 - knn_prob)  # Ensure positive class probability
+  
+  # Compute ROC and AUC
+  roc_obj <- roc(y_test, knn_prob)
+  
+  #Compute AUC value
+  auc_value <- auc(roc_obj)
+  #print(auc_value)
+  
+  #Compute confusion matrix
+  conf_mat <- table(knn_pred, y_test)
+  #print(conf_mat)
+
+  # accuracy, which is not a good indicator of fit for imbalance data but we now biased towards the Yes class it's fair
+  acc <- mean(knn_pred == y_test)
+  #print("Accuracy:")
+  #print(acc)
+}
+
+#Plot recall (TPR) over possible k with atleast 85% TPR
+plot_recall_vs_k(recallk_df, threshold_top[2])
+print(c("Possible ks:", threshold_top))
+
+knn_k_top(threshold_top[2])
+```
 
 ### Conclusion
+
+The analysis aimed to identify key risk factors for Coronary Heart Disease (CHD) and compare the performance of logistic regression and k-Nearest Neighbors (KNN) models in predicting CHD. Key insights from the data suggest that demographic and health factors, such as age, male sex, cigarettes per day (cpd), hypertension (HTN), diabetes, and diastolic blood pressure, have a significant impact on CHD risk.
+
+Despite the better performance of logistic regression, both models struggled with class imbalance, which can lead to high false positives and misclassification of CHD cases. The use of recall and AUC-ROC metrics helped mitigate this challenge, providing a more accurate assessment of model performance in imbalanced datasets. Logistic regression's threshold adjustment and KNN's optimal K value (7) were crucial in maximizing true positive rates.
+
+In conclusion, while logistic regression proved to be a better model for predicting CHD in this analysis, further improvements, such as handling the class imbalance through more sophisticated techniques (e.g., resampling, penalization), may enhance model performance and help achieve more accurate predictions for CHD.\
+
+### References
+
+1.  National Center for Health Statistics. Multiple Cause of Death 2018–2022 on CDC WONDER Database. Accessed May 3, 2024. <https://wonder.cdc.gov/mcd.html>
+
+2.  Eve Richardson, Raphael Trevizani, Jason A. Greenbaum, Hannah Carter, Morten Nielsen, Bjoern Peters, The receiver operating characteristic curve accurately assesses imbalanced datasets, Patterns, Volume 5, Issue 6, 2024, 100994, ISSN 2666-3899, <https://doi.org/10.1016/j.patter.2024.100994>. (<https://www.sciencedirect.com/science/article/pii/S2666389924001090>)
